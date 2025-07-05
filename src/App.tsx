@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { VoiceRecognitionService } from "./services/VoiceRecognitionService";
-import { SpeechToTextService } from "./services/SpeechToTextService";
+import { RealTimeTranslatorService } from "./services/RealTimeTranslatorService";
 import type { ChatMessage } from "./types/ChatTypes";
 
 function App() {
@@ -14,66 +13,41 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [sourceLanguage, setSourceLanguage] = useState<string>("");
   
-  const voiceServiceRef = useRef<VoiceRecognitionService | null>(null);
-  const speechToTextServiceRef = useRef<SpeechToTextService | null>(null);
+  const translatorServiceRef = useRef<RealTimeTranslatorService | null>(null);
 
   useEffect(() => {
-    // SpeechToTextServiceを初期化
-    speechToTextServiceRef.current = new SpeechToTextService({
-      apiKey: apiKey,
-      model: "whisper-1",
-      language: sourceLanguage || undefined // 空文字の場合はundefinedで自動検出
-    });
-
-    // VoiceRecognitionServiceを初期化
-    voiceServiceRef.current = new VoiceRecognitionService(
+    // RealTimeTranslatorServiceを初期化
+    translatorServiceRef.current = new RealTimeTranslatorService(
       {
-        silenceThreshold: 0.01,
-        silenceDuration: 1500,
-        sampleRate: 44100
+        apiKey: apiKey,
+        sourceLanguage: sourceLanguage || undefined,
+        voiceConfig: {
+          silenceThreshold: 0.01,
+          silenceDuration: 1500,
+          sampleRate: 44100
+        }
       },
       {
         onSpeechStart: () => {
           console.log("音声検出開始");
           setSpeechText("音声を検出中...");
         },
-        onSpeechEnd: (audioBlob) => {
-          console.log("音声検出終了", audioBlob);
+        onSpeechProcessing: () => {
+          console.log("音声処理中");
           setSpeechText("音声を処理中...");
           setIsProcessing(true);
-          
-          (async () => {
-            try {
-              if (speechToTextServiceRef.current) {
-                // APIキーを更新
-                speechToTextServiceRef.current.updateApiKey(apiKey);
-                
-                // 音声をテキストに変換
-                const transcribedText = await speechToTextServiceRef.current.convertAudioToText(audioBlob);
-                
-                if (transcribedText.trim()) {
-                  // チャット履歴に追加
-                  const newMessage: ChatMessage = {
-                    id: Date.now().toString(),
-                    text: transcribedText,
-                    timestamp: new Date(),
-                    type: 'user'
-                  };
-                  
-                  setChatHistory(prev => [...prev, newMessage]);
-                  setSpeechText("");
-                } else {
-                  setSpeechText("音声が認識できませんでした");
-                }
-              }
-            } catch (error) {
-              console.error("音声変換エラー:", error);
-              setError(error instanceof Error ? error.message : "音声変換に失敗しました");
-              setSpeechText("");
-            } finally {
-              setIsProcessing(false);
-            }
-          })();
+        },
+        onSpeechRecognized: (text) => {
+          console.log("音声認識完了:", text);
+          const newMessage: ChatMessage = {
+            id: Date.now().toString(),
+            text: text,
+            timestamp: new Date(),
+            type: 'user'
+          };
+          setChatHistory(prev => [...prev, newMessage]);
+          setSpeechText("");
+          setIsProcessing(false);
         },
         onError: (errorMessage) => {
           console.error("音声認識エラー:", errorMessage);
@@ -83,13 +57,20 @@ function App() {
         },
         onVolumeChange: (vol) => {
           setVolume(vol);
+        },
+        onStatusChange: (status) => {
+          setIsListening(status.isListening);
+          setIsProcessing(status.isProcessing);
+          if (status.currentText) {
+            setSpeechText(status.currentText);
+          }
         }
       }
     );
 
     return () => {
-      if (voiceServiceRef.current) {
-        voiceServiceRef.current.stopListening();
+      if (translatorServiceRef.current) {
+        translatorServiceRef.current.destroy();
       }
     };
   }, [apiKey, sourceLanguage]);
@@ -104,8 +85,8 @@ function App() {
     setError("");
     
     try {
-      if (voiceServiceRef.current) {
-        await voiceServiceRef.current.startListening();
+      if (translatorServiceRef.current) {
+        await translatorServiceRef.current.startListening();
         setIsListening(true);
         console.log("翻訳を開始しました");
       }
@@ -122,8 +103,8 @@ function App() {
     setSpeechText("");
     setVolume(0);
     
-    if (voiceServiceRef.current) {
-      voiceServiceRef.current.stopListening();
+    if (translatorServiceRef.current) {
+      translatorServiceRef.current.stopListening();
     }
     
     console.log("翻訳を停止しました");
