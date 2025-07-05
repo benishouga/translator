@@ -19,7 +19,7 @@ export class TextToSpeechService {
   private audioContext: AudioContext | null = null;
   private currentAudioSource: AudioBufferSourceNode | null = null;
   private isPlaying = false;
-  private speechQueue: Array<{ text: string; callbacks?: AudioStreamCallbacks }> = [];
+  private readonly speechQueue: Array<{ text: string; callbacks?: AudioStreamCallbacks }> = [];
   private isProcessingQueue = false;
 
   constructor(config: TextToSpeechConfig) {
