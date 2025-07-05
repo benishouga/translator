@@ -2,6 +2,8 @@
 
 音声認識とリアルタイム翻訳を行うWebアプリケーションです。マイクから音声を取得し、OpenAI APIを使用してテキストに変換し、日本語⇔英語の翻訳を行います。
 
+🌐 **デモサイト**: [https://benishouga.github.io/translator/](https://benishouga.github.io/translator/)
+
 ## 機能
 
 ### 🎤 音声認識
