@@ -19,6 +19,8 @@ export class TextToSpeechService {
   private audioContext: AudioContext | null = null;
   private currentAudioSource: AudioBufferSourceNode | null = null;
   private isPlaying = false;
+  private speechQueue: Array<{ text: string; callbacks?: AudioStreamCallbacks }> = [];
+  private isProcessingQueue = false;
 
   constructor(config: TextToSpeechConfig) {
     this.apiKey = config.apiKey;
@@ -36,21 +38,40 @@ export class TextToSpeechService {
       throw new Error("音声出力するテキストが空です");
     }
 
-    try {
-      callbacks?.onAudioStart?.();
-      
-      // OpenAI TTS APIを呼び出し
-      const audioBuffer = await this.generateSpeech(text);
-      
-      // 音声を再生
-      await this.playAudio(audioBuffer, callbacks);
-      
-    } catch (error) {
-      console.error("音声出力エラー:", error);
-      const errorMessage = error instanceof Error ? error.message : "音声出力に失敗しました";
-      callbacks?.onError?.(errorMessage);
-      throw error;
+    // キューに追加
+    this.speechQueue.push({ text, callbacks });
+    
+    // キューの処理を開始（既に処理中でない場合）
+    if (!this.isProcessingQueue) {
+      await this.processQueue();
     }
+  }
+
+  private async processQueue(): Promise<void> {
+    this.isProcessingQueue = true;
+
+    while (this.speechQueue.length > 0) {
+      const item = this.speechQueue.shift();
+      if (!item) break;
+
+      try {
+        item.callbacks?.onAudioStart?.();
+        
+        // OpenAI TTS APIを呼び出し
+        const audioBuffer = await this.generateSpeech(item.text);
+        
+        // 音声を再生（完了まで待機）
+        await this.playAudio(audioBuffer, item.callbacks);
+        
+      } catch (error) {
+        console.error("音声出力エラー:", error);
+        const errorMessage = error instanceof Error ? error.message : "音声出力に失敗しました";
+        item.callbacks?.onError?.(errorMessage);
+        // エラーが発生してもキューの処理は継続
+      }
+    }
+
+    this.isProcessingQueue = false;
   }
 
   private async generateSpeech(text: string): Promise<ArrayBuffer> {
@@ -78,45 +99,56 @@ export class TextToSpeechService {
   }
 
   private async playAudio(audioBuffer: ArrayBuffer, callbacks?: AudioStreamCallbacks): Promise<void> {
-    try {
-      // AudioContextを初期化
-      this.audioContext ??= new AudioContext();
+    return new Promise((resolve, reject) => {
+      // 非同期処理を内部で実行
+      (async () => {
+        try {
+          // AudioContextを初期化
+          this.audioContext ??= new AudioContext();
 
-      // AudioContextが suspended状態の場合は resume
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
+          // AudioContextが suspended状態の場合は resume
+          if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+          }
 
-      // 既存の音声を停止
-      this.stopCurrentAudio();
+          // 既存の音声を停止
+          this.stopCurrentAudio();
 
-      // ArrayBufferをAudioBufferにデコード
-      const audioBufferData = await this.audioContext.decodeAudioData(audioBuffer);
+          // ArrayBufferをAudioBufferにデコード
+          const audioBufferData = await this.audioContext.decodeAudioData(audioBuffer);
 
-      // AudioBufferSourceNodeを作成
-      this.currentAudioSource = this.audioContext.createBufferSource();
-      this.currentAudioSource.buffer = audioBufferData;
-      this.currentAudioSource.connect(this.audioContext.destination);
+          // AudioBufferSourceNodeを作成
+          this.currentAudioSource = this.audioContext.createBufferSource();
+          this.currentAudioSource.buffer = audioBufferData;
+          this.currentAudioSource.connect(this.audioContext.destination);
 
-      // 再生終了のイベントリスナーを設定
-      this.currentAudioSource.onended = () => {
-        this.isPlaying = false;
-        this.currentAudioSource = null;
-        callbacks?.onAudioEnd?.();
-      };
+          // 再生終了のイベントリスナーを設定
+          this.currentAudioSource.onended = () => {
+            this.isPlaying = false;
+            this.currentAudioSource = null;
+            callbacks?.onAudioEnd?.();
+            resolve(); // 再生完了を通知
+          };
 
-      // 音声を再生
-      this.isPlaying = true;
-      this.currentAudioSource.start();
+          // 音声を再生
+          this.isPlaying = true;
+          this.currentAudioSource.start();
 
-    } catch (error) {
-      this.isPlaying = false;
-      this.currentAudioSource = null;
-      throw error;
-    }
+        } catch (error) {
+          this.isPlaying = false;
+          this.currentAudioSource = null;
+          const errorMessage = error instanceof Error ? error : new Error("音声再生中にエラーが発生しました");
+          reject(errorMessage);
+        }
+      })();
+    });
   }
 
   stopCurrentAudio(): void {
+    // キューをクリア
+    this.speechQueue.length = 0;
+    this.isProcessingQueue = false;
+    
     if (this.currentAudioSource && this.isPlaying) {
       this.currentAudioSource.stop();
       this.currentAudioSource = null;
@@ -140,6 +172,14 @@ export class TextToSpeechService {
 
   isCurrentlyPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  // キューの状態を取得
+  getQueueStatus(): { isProcessing: boolean; queueLength: number } {
+    return {
+      isProcessing: this.isProcessingQueue,
+      queueLength: this.speechQueue.length
+    };
   }
 
   // リソースの解放
