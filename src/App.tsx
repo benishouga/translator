@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { VoiceRecognitionService } from "./services/VoiceRecognitionService";
+import { SpeechToTextService } from "./services/SpeechToTextService";
+import type { ChatMessage } from "./types/ChatTypes";
 
 function App() {
   const [apiKey, setApiKey] = useState("");
@@ -8,10 +10,20 @@ function App() {
   const [volume, setVolume] = useState(0);
   const [speechText, setSpeechText] = useState("");
   const [error, setError] = useState("");
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const voiceServiceRef = useRef<VoiceRecognitionService | null>(null);
+  const speechToTextServiceRef = useRef<SpeechToTextService | null>(null);
 
   useEffect(() => {
+    // SpeechToTextServiceを初期化
+    speechToTextServiceRef.current = new SpeechToTextService({
+      apiKey: apiKey,
+      model: "whisper-1",
+      language: "ja"
+    });
+
     // VoiceRecognitionServiceを初期化
     voiceServiceRef.current = new VoiceRecognitionService(
       {
@@ -27,16 +39,46 @@ function App() {
         onSpeechEnd: (audioBlob) => {
           console.log("音声検出終了", audioBlob);
           setSpeechText("音声を処理中...");
-          // 将来的にここで音声をテキストに変換する処理を実装予定
-          // 今は仮の処理として、数秒後にテキストを表示
-          setTimeout(() => {
-            setSpeechText("音声からテキストへの変換が完了しました");
-          }, 1000);
+          setIsProcessing(true);
+          
+          (async () => {
+            try {
+              if (speechToTextServiceRef.current) {
+                // APIキーを更新
+                speechToTextServiceRef.current.updateApiKey(apiKey);
+                
+                // 音声をテキストに変換
+                const transcribedText = await speechToTextServiceRef.current.convertAudioToText(audioBlob);
+                
+                if (transcribedText.trim()) {
+                  // チャット履歴に追加
+                  const newMessage: ChatMessage = {
+                    id: Date.now().toString(),
+                    text: transcribedText,
+                    timestamp: new Date(),
+                    type: 'user'
+                  };
+                  
+                  setChatHistory(prev => [...prev, newMessage]);
+                  setSpeechText("");
+                } else {
+                  setSpeechText("音声が認識できませんでした");
+                }
+              }
+            } catch (error) {
+              console.error("音声変換エラー:", error);
+              setError(error instanceof Error ? error.message : "音声変換に失敗しました");
+              setSpeechText("");
+            } finally {
+              setIsProcessing(false);
+            }
+          })();
         },
         onError: (errorMessage) => {
           console.error("音声認識エラー:", errorMessage);
           setError(errorMessage);
           setIsListening(false);
+          setIsProcessing(false);
         },
         onVolumeChange: (vol) => {
           setVolume(vol);
@@ -49,7 +91,7 @@ function App() {
         voiceServiceRef.current.stopListening();
       }
     };
-  }, []);
+  }, [apiKey]);
 
   const handleStartTranslation = async () => {
     if (!apiKey.trim()) {
@@ -152,6 +194,31 @@ function App() {
                 {speechText}
               </div>
             )}
+            {isProcessing && (
+              <div className="text-sm text-blue-600 mt-2">
+                音声を処理中...
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* チャット履歴 */}
+        {chatHistory.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-sm font-medium mb-2">認識した音声:</h3>
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {chatHistory.map((message) => (
+                <div
+                  key={message.id}
+                  className="p-3 bg-gray-50 rounded-md border"
+                >
+                  <div className="text-sm text-gray-700">{message.text}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {message.timestamp.toLocaleTimeString()}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         
