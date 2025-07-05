@@ -49,6 +49,19 @@ function App() {
           setSpeechText("");
           setIsProcessing(false);
         },
+        onTranslationComplete: (result) => {
+          console.log("翻訳完了:", result);
+          const translationMessage: ChatMessage = {
+            id: `trans-${Date.now()}`,
+            text: result.translatedText,
+            timestamp: new Date(),
+            type: 'translation',
+            originalText: result.originalText,
+            sourceLanguage: result.sourceLanguage,
+            targetLanguage: result.targetLanguage
+          };
+          setChatHistory(prev => [...prev, translationMessage]);
+        },
         onError: (errorMessage) => {
           console.error("音声認識エラー:", errorMessage);
           setError(errorMessage);
@@ -233,13 +246,38 @@ function App() {
                   {chatHistory.map((message) => (
                     <div
                       key={message.id}
-                      className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                      className={`p-4 rounded-lg border transition-shadow ${
+                        message.type === 'translation' 
+                          ? 'bg-blue-50 border-blue-200 hover:shadow-sm' 
+                          : 'bg-gray-50 border-gray-200 hover:shadow-sm'
+                      }`}
                     >
-                      <div className="text-gray-800 leading-relaxed">{message.text}</div>
+                      {message.type === 'translation' ? (
+                        <div>
+                          <div className="text-sm text-gray-600 mb-2">
+                            <span className="font-medium">元テキスト ({message.sourceLanguage === 'ja' ? '日本語' : '英語'}):</span>
+                          </div>
+                          <div className="text-gray-700 mb-3 p-2 bg-white rounded border">
+                            {message.originalText}
+                          </div>
+                          <div className="text-sm text-blue-600 mb-2">
+                            <span className="font-medium">翻訳結果 ({message.targetLanguage === 'ja' ? '日本語' : '英語'}):</span>
+                          </div>
+                          <div className="text-gray-800 font-medium leading-relaxed">
+                            {message.text}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-gray-800 leading-relaxed">{message.text}</div>
+                      )}
                       <div className="text-xs text-gray-500 mt-2 flex justify-between items-center">
                         <span>{message.timestamp.toLocaleTimeString()}</span>
-                        <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs font-medium">
-                          音声認識
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          message.type === 'translation' 
+                            ? 'bg-blue-100 text-blue-600' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {message.type === 'translation' ? '翻訳' : '音声認識'}
                         </span>
                       </div>
                     </div>

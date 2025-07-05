@@ -2,6 +2,8 @@ import { VoiceRecognitionService } from './VoiceRecognitionService';
 import type { VoiceRecognitionConfig } from './VoiceRecognitionService';
 import { SpeechToTextService } from './SpeechToTextService';
 import type { SpeechToTextConfig } from './SpeechToTextService';
+import { TranslationService } from './TranslationService';
+import type { TranslationResult } from './TranslationService';
 
 export interface TranslatorConfig {
   apiKey: string;
@@ -16,7 +18,7 @@ export interface TranslatorCallbacks {
   onSpeechProcessing?: () => void;
   onSpeechRecognized?: (text: string) => void;
   onTranslationStart?: (originalText: string) => void;
-  onTranslationComplete?: (originalText: string, translatedText: string) => void;
+  onTranslationComplete?: (result: TranslationResult) => void;
   onError?: (error: string) => void;
   onVolumeChange?: (volume: number) => void;
   onStatusChange?: (status: TranslatorStatus) => void;
@@ -33,6 +35,7 @@ export interface TranslatorStatus {
 export class RealTimeTranslatorService {
   private readonly voiceService: VoiceRecognitionService;
   private readonly speechToTextService: SpeechToTextService;
+  private readonly translationService: TranslationService;
   private config: TranslatorConfig;
   private readonly callbacks: TranslatorCallbacks;
   private status: TranslatorStatus = {
@@ -52,6 +55,12 @@ export class RealTimeTranslatorService {
       apiKey: config.apiKey,
       model: config.speechConfig?.model ?? 'whisper-1',
       language: config.sourceLanguage
+    });
+
+    // TranslationServiceを初期化
+    this.translationService = new TranslationService({
+      apiKey: config.apiKey,
+      model: 'gpt-4.1'
     });
 
     // VoiceRecognitionServiceを初期化
@@ -119,10 +128,8 @@ export class RealTimeTranslatorService {
         this.updateStatus({ currentText: '' });
         this.callbacks.onSpeechRecognized?.(transcribedText);
         
-        // 将来的に翻訳機能を追加予定
-        if (this.config.targetLanguage) {
-          await this.translateText(transcribedText);
-        }
+        // 自動翻訳を実行
+        await this.translateText(transcribedText);
       } else {
         this.updateStatus({ currentText: '音声が認識できませんでした' });
       }
@@ -160,6 +167,7 @@ export class RealTimeTranslatorService {
     // APIキーの更新
     if (config.apiKey) {
       this.speechToTextService.updateApiKey(config.apiKey);
+      this.translationService.updateApiKey(config.apiKey);
     }
     
     // 言語の更新
@@ -178,16 +186,16 @@ export class RealTimeTranslatorService {
     return { ...this.status };
   }
 
-  // 翻訳機能（将来的に実装予定）
+  // 翻訳機能
   private async translateText(text: string): Promise<void> {
     this.updateStatus({ isTranslating: true });
     this.callbacks.onTranslationStart?.(text);
     
     try {
-      // 現在は翻訳機能未実装のため、元のテキストをそのまま返す
-      // 将来的にOpenAI APIやGoogle Translate APIなどを使用して翻訳を実装
-      const translatedText = text; // プレースホルダー
-      this.callbacks.onTranslationComplete?.(text, translatedText);
+      // TranslationServiceを使用して翻訳
+      this.translationService.updateApiKey(this.config.apiKey);
+      const result = await this.translationService.translateText(text);
+      this.callbacks.onTranslationComplete?.(result);
     } catch (error) {
       this.handleError(error instanceof Error ? error.message : '翻訳に失敗しました');
     } finally {
