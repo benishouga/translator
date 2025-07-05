@@ -16,6 +16,7 @@ function App() {
   const [isTestPanelOpen, setIsTestPanelOpen] = useState(false);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [noiseFilterEnabled, setNoiseFilterEnabled] = useState<boolean>(true);
   
   const translatorServiceRef = useRef<RealTimeTranslatorService | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
@@ -56,9 +57,13 @@ function App() {
         enableAutoSpeak: true, // 自動音声出力を有効にする
         voiceConfig: {
           silenceThreshold: 0.01,
-          silenceDuration: 1500,
+          silenceDuration: 1000,
           sampleRate: 44100,
-          deviceId: selectedDeviceId || undefined
+          deviceId: selectedDeviceId || undefined,
+          noiseFilterEnabled: noiseFilterEnabled, // ノイズフィルタリング設定
+          minSpeechVolume: 0.02, // 最小音声音量を2%に設定
+          minSpeechDuration: 600, // 最小音声継続時間を600msに延長（咳払い除去）
+          volumeStabilityThreshold: 0.01 // 音量変動の閾値を調整
         },
         ttsConfig: {
           model: 'tts-1',
@@ -131,7 +136,7 @@ function App() {
         translatorServiceRef.current.destroy();
       }
     };
-  }, [apiKey, sourceLanguage, selectedDeviceId]);
+  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled]);
 
   const handleStartTranslation = async () => {
     if (!apiKey.trim()) {
@@ -279,6 +284,27 @@ function App() {
                       マイクの許可が必要です。一度翻訳を開始してください。
                     </p>
                   )}
+                </div>
+
+                <div>
+                  <label className="flex items-center space-x-2 text-sm font-medium text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={noiseFilterEnabled}
+                      onChange={(e) => setNoiseFilterEnabled(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      disabled={isTranslating}
+                    />
+                    <span>ノイズフィルタリング（呼吸音・咳払い等を除去）</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    無効にすると、より多くの音声を拾いますが、ノイズも増えます
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    🔹 600ms未満の短い音声を除去<br/>
+                    🔹 急激な音量変化（咳払い）を検出<br/>
+                    🔹 一定音量のノイズ（呼吸音）を除去
+                  </p>
                 </div>
               </div>
             </div>
