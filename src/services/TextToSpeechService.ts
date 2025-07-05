@@ -2,7 +2,6 @@ export interface TextToSpeechConfig {
   apiKey: string;
   model?: string;
   voice?: string;
-  speed?: number;
 }
 
 export interface AudioStreamCallbacks {
@@ -15,7 +14,6 @@ export class TextToSpeechService {
   private apiKey: string;
   private readonly model: string;
   private readonly voice: string;
-  private readonly speed: number;
   private audioContext: AudioContext | null = null;
   private currentAudioSource: AudioBufferSourceNode | null = null;
   private isPlaying = false;
@@ -26,7 +24,6 @@ export class TextToSpeechService {
     this.apiKey = config.apiKey;
     this.model = config.model ?? "tts-1";
     this.voice = config.voice ?? "alloy";
-    this.speed = config.speed ?? 1.0;
   }
 
   async speakText(text: string, callbacks?: AudioStreamCallbacks): Promise<void> {
@@ -94,7 +91,7 @@ export class TextToSpeechService {
         model: this.model,
         input: text,
         voice: this.voice,
-        speed: this.speed,
+        instructions: "Please speak a little faster.",
         response_format: "mp3"
       }),
     });
@@ -172,11 +169,6 @@ export class TextToSpeechService {
   updateVoice(_voice: string): void {
     // 新しいインスタンスを作成する必要があるため、この設定は即座には反映されません
     console.warn("音声の変更は次回のインスタンス作成時に反映されます");
-  }
-
-  updateSpeed(_speed: number): void {
-    // 新しいインスタンスを作成する必要があるため、この設定は即座には反映されません
-    console.warn("速度の変更は次回のインスタンス作成時に反映されます");
   }
 
   isCurrentlyPlaying(): boolean {

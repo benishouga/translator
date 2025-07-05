@@ -66,9 +66,8 @@ function App() {
           volumeStabilityThreshold: 0.01 // 音量変動の閾値を調整
         },
         ttsConfig: {
-          model: 'tts-1',
+          model: 'gpt-4o-mini-tts',
           voice: 'alloy',
-          speed: 1.0
         }
       },
       {

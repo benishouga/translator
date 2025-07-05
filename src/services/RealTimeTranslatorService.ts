@@ -77,7 +77,6 @@ export class RealTimeTranslatorService {
       apiKey: config.apiKey,
       model: config.ttsConfig?.model ?? 'tts-1',
       voice: config.ttsConfig?.voice ?? 'alloy',
-      speed: config.ttsConfig?.speed ?? 1.0
     });
 
     // VoiceRecognitionServiceを初期化
