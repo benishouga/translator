@@ -4,6 +4,8 @@ import { SpeechToTextService } from './SpeechToTextService';
 import type { SpeechToTextConfig } from './SpeechToTextService';
 import { TranslationService } from './TranslationService';
 import type { TranslationResult } from './TranslationService';
+import { TextToSpeechService } from './TextToSpeechService';
+import type { TextToSpeechConfig } from './TextToSpeechService';
 
 export interface TranslatorConfig {
   apiKey: string;
@@ -11,6 +13,8 @@ export interface TranslatorConfig {
   targetLanguage?: string;
   voiceConfig?: Partial<VoiceRecognitionConfig>;
   speechConfig?: Partial<SpeechToTextConfig>;
+  ttsConfig?: Partial<TextToSpeechConfig>;
+  enableAutoSpeak?: boolean; // 翻訳結果を自動で音声出力するかどうか
 }
 
 export interface TranslatorCallbacks {
@@ -19,6 +23,8 @@ export interface TranslatorCallbacks {
   onSpeechRecognized?: (text: string) => void;
   onTranslationStart?: (originalText: string) => void;
   onTranslationComplete?: (result: TranslationResult) => void;
+  onAudioStart?: () => void;
+  onAudioEnd?: () => void;
   onError?: (error: string) => void;
   onVolumeChange?: (volume: number) => void;
   onStatusChange?: (status: TranslatorStatus) => void;
@@ -28,6 +34,7 @@ export interface TranslatorStatus {
   isListening: boolean;
   isProcessing: boolean;
   isTranslating: boolean;
+  isSpeaking: boolean;
   volume: number;
   currentText: string;
 }
@@ -36,12 +43,14 @@ export class RealTimeTranslatorService {
   private readonly voiceService: VoiceRecognitionService;
   private readonly speechToTextService: SpeechToTextService;
   private readonly translationService: TranslationService;
+  private readonly textToSpeechService: TextToSpeechService;
   private config: TranslatorConfig;
   private readonly callbacks: TranslatorCallbacks;
   private status: TranslatorStatus = {
     isListening: false,
     isProcessing: false,
     isTranslating: false,
+    isSpeaking: false,
     volume: 0,
     currentText: ''
   };
@@ -61,6 +70,14 @@ export class RealTimeTranslatorService {
     this.translationService = new TranslationService({
       apiKey: config.apiKey,
       model: 'gpt-4.1'
+    });
+
+    // TextToSpeechServiceを初期化
+    this.textToSpeechService = new TextToSpeechService({
+      apiKey: config.apiKey,
+      model: config.ttsConfig?.model ?? 'tts-1',
+      voice: config.ttsConfig?.voice ?? 'alloy',
+      speed: config.ttsConfig?.speed ?? 1.0
     });
 
     // VoiceRecognitionServiceを初期化
@@ -92,10 +109,12 @@ export class RealTimeTranslatorService {
 
   stopListening(): void {
     this.voiceService.stopListening();
+    this.textToSpeechService.stopCurrentAudio();
     this.updateStatus({ 
       isListening: false, 
       isProcessing: false, 
       isTranslating: false,
+      isSpeaking: false,
       volume: 0,
       currentText: ''
     });
@@ -168,6 +187,7 @@ export class RealTimeTranslatorService {
     if (config.apiKey) {
       this.speechToTextService.updateApiKey(config.apiKey);
       this.translationService.updateApiKey(config.apiKey);
+      this.textToSpeechService.updateApiKey(config.apiKey);
     }
     
     // 言語の更新
@@ -196,6 +216,12 @@ export class RealTimeTranslatorService {
       this.translationService.updateApiKey(this.config.apiKey);
       const result = await this.translationService.translateText(text);
       this.callbacks.onTranslationComplete?.(result);
+      
+      // 自動音声出力が有効な場合は翻訳結果を読み上げ
+      if (this.config.enableAutoSpeak) {
+        await this.speakText(result.translatedText);
+      }
+      
     } catch (error) {
       this.handleError(error instanceof Error ? error.message : '翻訳に失敗しました');
     } finally {
@@ -203,8 +229,42 @@ export class RealTimeTranslatorService {
     }
   }
 
+  // 音声出力機能
+  private async speakText(text: string): Promise<void> {
+    this.updateStatus({ isSpeaking: true });
+    this.callbacks.onAudioStart?.();
+    
+    try {
+      // TextToSpeechServiceを使用して音声出力
+      this.textToSpeechService.updateApiKey(this.config.apiKey);
+      await this.textToSpeechService.speakText(text, {
+        onAudioStart: () => {
+          this.callbacks.onAudioStart?.();
+        },
+        onAudioEnd: () => {
+          this.updateStatus({ isSpeaking: false });
+          this.callbacks.onAudioEnd?.();
+        },
+        onError: (error) => {
+          this.handleError(error);
+        }
+      });
+      
+    } catch (error) {
+      this.handleError(error instanceof Error ? error.message : '音声出力に失敗しました');
+      this.updateStatus({ isSpeaking: false });
+    }
+  }
+
+  // 音声出力を停止
+  stopSpeaking(): void {
+    this.textToSpeechService.stopCurrentAudio();
+    this.updateStatus({ isSpeaking: false });
+  }
+
   // リソースの解放
   destroy(): void {
     this.voiceService.stopListening();
+    this.textToSpeechService.destroy();
   }
 }

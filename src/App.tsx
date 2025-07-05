@@ -21,10 +21,16 @@ function App() {
       {
         apiKey: apiKey,
         sourceLanguage: sourceLanguage || undefined,
+        enableAutoSpeak: true, // 自動音声出力を有効にする
         voiceConfig: {
           silenceThreshold: 0.01,
           silenceDuration: 1500,
           sampleRate: 44100
+        },
+        ttsConfig: {
+          model: 'tts-1',
+          voice: 'alloy',
+          speed: 1.0
         }
       },
       {
@@ -61,6 +67,12 @@ function App() {
             targetLanguage: result.targetLanguage
           };
           setChatHistory(prev => [...prev, translationMessage]);
+        },
+        onAudioStart: () => {
+          console.log("音声出力開始");
+        },
+        onAudioEnd: () => {
+          console.log("音声出力終了");
         },
         onError: (errorMessage) => {
           console.error("音声認識エラー:", errorMessage);
