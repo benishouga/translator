@@ -1,18 +1,18 @@
 export interface SpeechToTextConfig {
   apiKey: string;
   model?: string;
-  language?: string;
+  language?: string; // 省略すると自動言語検出
 }
 
 export class SpeechToTextService {
   private apiKey: string;
   private readonly model: string;
-  private language: string;
+  private language?: string; // undefinedの場合は自動言語検出
 
   constructor(config: SpeechToTextConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model ?? "whisper-1";
-    this.language = config.language ?? "ja";
+    this.language = config.language; // デフォルト値を設定しない（自動検出）
   }
 
   async convertAudioToText(audioBlob: Blob): Promise<string> {
@@ -24,7 +24,11 @@ export class SpeechToTextService {
       const formData = new FormData();
       formData.append("file", audioBlob, "audio.wav");
       formData.append("model", this.model);
-      formData.append("language", this.language);
+      
+      // 言語が指定されている場合のみ追加（未指定の場合は自動検出）
+      if (this.language) {
+        formData.append("language", this.language);
+      }
 
       const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
         method: "POST",
@@ -54,7 +58,7 @@ export class SpeechToTextService {
     this.apiKey = apiKey;
   }
 
-  updateLanguage(language: string): void {
+  updateLanguage(language?: string): void {
     this.language = language;
   }
 }

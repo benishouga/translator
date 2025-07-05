@@ -12,6 +12,7 @@ function App() {
   const [error, setError] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sourceLanguage, setSourceLanguage] = useState<string>("");
   
   const voiceServiceRef = useRef<VoiceRecognitionService | null>(null);
   const speechToTextServiceRef = useRef<SpeechToTextService | null>(null);
@@ -21,7 +22,7 @@ function App() {
     speechToTextServiceRef.current = new SpeechToTextService({
       apiKey: apiKey,
       model: "whisper-1",
-      language: "ja"
+      language: sourceLanguage || undefined // 空文字の場合はundefinedで自動検出
     });
 
     // VoiceRecognitionServiceを初期化
@@ -91,7 +92,7 @@ function App() {
         voiceServiceRef.current.stopListening();
       }
     };
-  }, [apiKey]);
+  }, [apiKey, sourceLanguage]);
 
   const handleStartTranslation = async () => {
     if (!apiKey.trim()) {
@@ -144,6 +145,22 @@ function App() {
           placeholder="APIキーを入力してください"
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+      </div>
+
+      <div className="language-section mb-6">
+        <label htmlFor="sourceLanguage" className="block text-sm font-medium mb-2">
+          元言語:
+        </label>
+        <select
+          id="sourceLanguage"
+          value={sourceLanguage}
+          onChange={(e) => setSourceLanguage(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">未指定（自動検出）</option>
+          <option value="ja">日本語</option>
+          <option value="en">英語</option>
+        </select>
       </div>
 
       <div className="control-section">
