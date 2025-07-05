@@ -14,6 +14,8 @@ function App() {
   const [sourceLanguage, setSourceLanguage] = useState<string>("");
   const [testText, setTestText] = useState<string>("");
   const [isTestPanelOpen, setIsTestPanelOpen] = useState(false);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   
   const translatorServiceRef = useRef<RealTimeTranslatorService | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
@@ -25,6 +27,26 @@ function App() {
     }
   }, [chatHistory]);
 
+  // オーディオデバイスを取得
+  useEffect(() => {
+    const getAudioDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        setAudioDevices(audioInputs);
+        
+        // デフォルトデバイスを選択
+        if (audioInputs.length > 0 && !selectedDeviceId) {
+          setSelectedDeviceId(audioInputs[0].deviceId);
+        }
+      } catch (error) {
+        console.error("オーディオデバイスの取得に失敗:", error);
+      }
+    };
+
+    getAudioDevices();
+  }, [selectedDeviceId]);
+
   useEffect(() => {
     // RealTimeTranslatorServiceを初期化
     translatorServiceRef.current = new RealTimeTranslatorService(
@@ -35,7 +57,8 @@ function App() {
         voiceConfig: {
           silenceThreshold: 0.01,
           silenceDuration: 1500,
-          sampleRate: 44100
+          sampleRate: 44100,
+          deviceId: selectedDeviceId || undefined
         },
         ttsConfig: {
           model: 'tts-1',
@@ -108,7 +131,7 @@ function App() {
         translatorServiceRef.current.destroy();
       }
     };
-  }, [apiKey, sourceLanguage]);
+  }, [apiKey, sourceLanguage, selectedDeviceId]);
 
   const handleStartTranslation = async () => {
     if (!apiKey.trim()) {
@@ -124,6 +147,15 @@ function App() {
         await translatorServiceRef.current.startListening();
         setIsListening(true);
         console.log("翻訳を開始しました");
+        
+        // マイクアクセス許可後にデバイスリストを更新
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioInputs = devices.filter(device => device.kind === 'audioinput');
+          setAudioDevices(audioInputs);
+        } catch (deviceError) {
+          console.warn("デバイスリストの更新に失敗:", deviceError);
+        }
       }
     } catch (error) {
       console.error("マイクアクセスエラー:", error);
@@ -219,6 +251,34 @@ function App() {
                     <option value="ja">日本語</option>
                     <option value="en">英語</option>
                   </select>
+                </div>
+
+                <div>
+                  <label htmlFor="micDevice" className="block text-sm font-medium mb-2 text-gray-600">
+                    マイクデバイス:
+                  </label>
+                  <select
+                    id="micDevice"
+                    value={selectedDeviceId}
+                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isTranslating}
+                  >
+                    {audioDevices.length === 0 ? (
+                      <option value="">マイクデバイスが見つかりません</option>
+                    ) : (
+                      audioDevices.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `マイク ${device.deviceId.slice(0, 8)}...`}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  {audioDevices.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      マイクの許可が必要です。一度翻訳を開始してください。
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

@@ -2,6 +2,7 @@ export interface VoiceRecognitionConfig {
   silenceThreshold: number; // 無音と判定する音量のしきい値 (0-1)
   silenceDuration: number; // 無音継続時間 (ミリ秒)
   sampleRate: number; // サンプリングレート
+  deviceId?: string; // 使用するマイクデバイスのID
 }
 
 export interface VoiceRecognitionCallbacks {
@@ -25,7 +26,8 @@ export class VoiceRecognitionService {
   private config: VoiceRecognitionConfig = {
     silenceThreshold: 0.01, // 1%の音量以下を無音とする
     silenceDuration: 1500, // 1.5秒の無音で区切り
-    sampleRate: 44100
+    sampleRate: 44100,
+    deviceId: undefined // デフォルトデバイスを使用
   };
   
   private readonly callbacks: VoiceRecognitionCallbacks = {};
@@ -42,14 +44,17 @@ export class VoiceRecognitionService {
   async startListening(): Promise<void> {
     try {
       // マイクへのアクセス許可を取得
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const constraints: MediaStreamConstraints = {
         audio: {
           sampleRate: this.config.sampleRate,
           channelCount: 1,
           echoCancellation: true,
-          noiseSuppression: true
-        } 
-      });
+          noiseSuppression: true,
+          ...(this.config.deviceId && { deviceId: { exact: this.config.deviceId } })
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       // AudioContextを初期化
       this.audioContext = new AudioContext();
