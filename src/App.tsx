@@ -14,6 +14,14 @@ function App() {
   const [sourceLanguage, setSourceLanguage] = useState<string>("");
   
   const translatorServiceRef = useRef<RealTimeTranslatorService | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // チャット履歴が更新されたときに自動スクロール
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
 
   useEffect(() => {
     // RealTimeTranslatorServiceを初期化
@@ -254,7 +262,10 @@ function App() {
               <h2 className="text-lg font-semibold mb-4 text-gray-700">認識した音声</h2>
               
               {chatHistory.length > 0 ? (
-                <div className="h-96 lg:h-[600px] overflow-y-auto space-y-3 pr-2">
+                <div 
+                  ref={chatContainerRef}
+                  className="h-96 lg:h-[600px] overflow-y-auto space-y-3 pr-2"
+                >
                   {chatHistory.map((message) => (
                     <div
                       key={message.id}
