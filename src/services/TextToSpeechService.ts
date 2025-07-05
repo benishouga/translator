@@ -48,6 +48,10 @@ export class TextToSpeechService {
   }
 
   private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue) {
+      return; // 既に処理中の場合は何もしない
+    }
+    
     this.isProcessingQueue = true;
 
     while (this.speechQueue.length > 0) {
@@ -55,6 +59,11 @@ export class TextToSpeechService {
       if (!item) break;
 
       try {
+        // 前の音声が完全に停止するまで待機
+        while (this.isPlaying) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
         item.callbacks?.onAudioStart?.();
         
         // OpenAI TTS APIを呼び出し
@@ -111,8 +120,8 @@ export class TextToSpeechService {
             await this.audioContext.resume();
           }
 
-          // 既存の音声を停止
-          this.stopCurrentAudio();
+          // キューイング処理中は既存の音声停止をスキップ
+          // （processQueueで既に前の音声完了を待機しているため）
 
           // ArrayBufferをAudioBufferにデコード
           const audioBufferData = await this.audioContext.decodeAudioData(audioBuffer);

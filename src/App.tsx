@@ -12,6 +12,8 @@ function App() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sourceLanguage, setSourceLanguage] = useState<string>("");
+  const [testText, setTestText] = useState<string>("");
+  const [isTestPanelOpen, setIsTestPanelOpen] = useState(false);
   
   const translatorServiceRef = useRef<RealTimeTranslatorService | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
@@ -143,6 +145,40 @@ function App() {
     console.log("翻訳を停止しました");
   };
 
+  const handleTestTranslation = async () => {
+    if (!apiKey.trim()) {
+      alert("APIキーを入力してください");
+      return;
+    }
+
+    if (!testText.trim()) {
+      alert("テスト用テキストを入力してください");
+      return;
+    }
+
+    // 入力テキストを保存してすぐにクリア（次の入力を可能にする）
+    const textToProcess = testText.trim();
+    setTestText("");
+    setError("");
+
+    try {
+      if (translatorServiceRef.current) {
+        // テキストを直接処理（翻訳・TTS処理）
+        await translatorServiceRef.current.processTextDirectly(textToProcess);
+      }
+    } catch (error) {
+      console.error("テスト翻訳エラー:", error);
+      setError(error instanceof Error ? error.message : "テスト翻訳に失敗しました");
+    }
+  };
+
+  const handleTestTextKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleTestTranslation();
+    }
+  };
+
   return (
     <div className="app min-h-screen bg-gray-50 p-4">
       <div className="max-w-6xl mx-auto">
@@ -221,6 +257,54 @@ function App() {
                 <div className="mt-4 text-center text-sm text-gray-600">
                   翻訳処理中です...
                 </div>
+              )}
+            </div>
+
+            {/* テスト翻訳パネル */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-700">テスト翻訳</h2>
+                <button
+                  onClick={() => setIsTestPanelOpen(!isTestPanelOpen)}
+                  className="text-sm px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  {isTestPanelOpen ? '閉じる' : '開く'}
+                </button>
+              </div>
+              
+              {isTestPanelOpen && (
+                <>
+                  <p className="text-sm text-gray-500 mb-4">マイクを使わずにテキスト入力で翻訳・音声出力をテストできます</p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="testText" className="block text-sm font-medium mb-2 text-gray-600">
+                        テスト用テキスト:
+                      </label>
+                      <textarea
+                        id="testText"
+                        value={testText}
+                        onChange={(e) => setTestText(e.target.value)}
+                        onKeyDown={handleTestTextKeyPress}
+                        placeholder="翻訳したいテキストを入力してください（Enterで実行、Shift+Enterで改行）"
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                      />
+                    </div>
+                    
+                    <button
+                      onClick={handleTestTranslation}
+                      disabled={!apiKey.trim() || !testText.trim()}
+                      className={`w-full px-4 py-2 rounded-md font-medium transition-colors ${
+                        !apiKey.trim() || !testText.trim()
+                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          : "bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg"
+                      }`}
+                    >
+                      テスト翻訳実行
+                    </button>
+                  </div>
+                </>
               )}
             </div>
 

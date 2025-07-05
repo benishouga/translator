@@ -217,9 +217,10 @@ export class RealTimeTranslatorService {
       const result = await this.translationService.translateText(text);
       this.callbacks.onTranslationComplete?.(result);
       
-      // 自動音声出力が有効な場合は翻訳結果を読み上げ
+      // 自動音声出力が有効な場合は翻訳結果を読み上げ（awaitなしでキューイング）
       if (this.config.enableAutoSpeak) {
-        await this.speakText(result.translatedText);
+        // awaitを使わずに非同期でキューに追加
+        this.speakTextAsync(result.translatedText);
       }
       
     } catch (error) {
@@ -229,37 +230,60 @@ export class RealTimeTranslatorService {
     }
   }
 
-  // 音声出力機能
-  private async speakText(text: string): Promise<void> {
-    this.updateStatus({ isSpeaking: true });
-    this.callbacks.onAudioStart?.();
-    
-    try {
-      // TextToSpeechServiceを使用して音声出力
-      this.textToSpeechService.updateApiKey(this.config.apiKey);
-      await this.textToSpeechService.speakText(text, {
-        onAudioStart: () => {
-          this.callbacks.onAudioStart?.();
-        },
-        onAudioEnd: () => {
-          this.updateStatus({ isSpeaking: false });
-          this.callbacks.onAudioEnd?.();
-        },
-        onError: (error) => {
-          this.handleError(error);
-        }
-      });
-      
-    } catch (error) {
+  // 音声出力機能（非同期、キューイング対応）
+  private speakTextAsync(text: string): void {
+    // TextToSpeechServiceを使用して音声出力（awaitなしでキューに追加）
+    this.textToSpeechService.updateApiKey(this.config.apiKey);
+    this.textToSpeechService.speakText(text, {
+      onAudioStart: () => {
+        this.updateStatus({ isSpeaking: true });
+        this.callbacks.onAudioStart?.();
+      },
+      onAudioEnd: () => {
+        // 少し遅延を入れてキューの状態を確認
+        setTimeout(() => {
+          const queueStatus = this.textToSpeechService.getQueueStatus();
+          const isStillPlaying = this.textToSpeechService.isCurrentlyPlaying();
+          
+          // キューが空で、処理中でもなく、再生中でもない場合のみ状態を更新
+          if (queueStatus.queueLength === 0 && !queueStatus.isProcessing && !isStillPlaying) {
+            this.updateStatus({ isSpeaking: false });
+          }
+        }, 50); // 短い遅延で確実にチェック
+        
+        this.callbacks.onAudioEnd?.();
+      },
+      onError: (error) => {
+        this.handleError(error);
+        this.updateStatus({ isSpeaking: false });
+      }
+    }).catch((error) => {
       this.handleError(error instanceof Error ? error.message : '音声出力に失敗しました');
       this.updateStatus({ isSpeaking: false });
-    }
+    });
   }
 
   // 音声出力を停止
   stopSpeaking(): void {
     this.textToSpeechService.stopCurrentAudio();
     this.updateStatus({ isSpeaking: false });
+  }
+
+  // テキストを直接処理する（音声認識をスキップして翻訳・TTS処理を行う）
+  async processTextDirectly(text: string): Promise<void> {
+    if (!text.trim()) {
+      throw new Error("処理するテキストが空です");
+    }
+
+    try {
+      // 音声認識のコールバックを呼び出し
+      this.callbacks.onSpeechRecognized?.(text);
+      
+      // 翻訳処理を実行
+      await this.translateText(text);
+    } catch (error) {
+      this.handleError(error instanceof Error ? error.message : 'テキスト処理に失敗しました');
+    }
   }
 
   // リソースの解放
