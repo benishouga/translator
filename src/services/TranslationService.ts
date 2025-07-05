@@ -29,19 +29,9 @@ export class TranslationService {
     }
 
     try {
-      // まず言語を検出
-      const detectedLanguage = await this.detectLanguage(text);
-      const targetLanguage = detectedLanguage === "ja" ? "en" : "ja";
-      
-      // 翻訳を実行
-      const translatedText = await this.performTranslation(text, detectedLanguage);
-
-      return {
-        originalText: text,
-        translatedText,
-        sourceLanguage: detectedLanguage,
-        targetLanguage
-      };
+      // 言語検出と翻訳を同時に実行
+      const result = await this.performTranslation(text);
+      return result;
     } catch (error) {
       console.error("翻訳エラー:", error);
       if (error instanceof Error) {
@@ -51,46 +41,19 @@ export class TranslationService {
     }
   }
 
-  private async detectLanguage(text: string): Promise<string> {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "以下のテキストが日本語か英語かを判定してください。日本語の場合は「ja」、英語の場合は「en」とだけ回答してください。"
-          },
-          {
-            role: "user",
-            content: text
-          }
-        ],
-        max_tokens: 10,
-        temperature: 0
-      }),
-    });
+  private async performTranslation(text: string): Promise<TranslationResult> {
+    const systemPrompt = `あなたは高精度な翻訳専門家です。以下のルールに従って翻訳してください：
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`OpenAI API Error: ${errorData.error?.message ?? response.statusText}`);
-    }
+1. 入力されたテキストが日本語の場合は英語に翻訳してください
+2. 入力されたテキストが英語の場合は日本語に翻訳してください
+3. 回答はJSON形式で以下の構造にしてください：
+{
+  "translatedText": "翻訳結果",
+  "sourceLanguage": "元の言語（ja または en）",
+  "targetLanguage": "翻訳先の言語（ja または en）"
+}
 
-    const data = await response.json();
-    const detectedLanguage = data.choices[0]?.message?.content?.trim().toLowerCase();
-    
-    // 日本語または英語以外の場合は英語として扱う
-    return detectedLanguage === "ja" ? "ja" : "en";
-  }
-
-  private async performTranslation(text: string, sourceLanguage: string): Promise<string> {
-    const systemPrompt = sourceLanguage === "ja" 
-      ? "あなたは日本語から英語への翻訳専門家です。提供されたテキストを自然で正確な英語に翻訳してください。翻訳結果のみを返してください。"
-      : "あなたは英語から日本語への翻訳専門家です。提供されたテキストを自然で正確な日本語に翻訳してください。翻訳結果のみを返してください。";
+翻訳は自然で正確になるよう心がけてください。`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -110,7 +73,7 @@ export class TranslationService {
             content: text
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 1500,
         temperature: 0.3
       }),
     });
@@ -121,7 +84,25 @@ export class TranslationService {
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content?.trim() ?? "";
+    const content = data.choices[0]?.message?.content?.trim() ?? "";
+    
+    try {
+      const result = JSON.parse(content);
+      return {
+        originalText: text,
+        translatedText: result.translatedText,
+        sourceLanguage: result.sourceLanguage,
+        targetLanguage: result.targetLanguage
+      };
+    } catch {
+      // JSONパースに失敗した場合はコンテンツをそのまま翻訳結果として使用
+      return {
+        originalText: text,
+        translatedText: content,
+        sourceLanguage: "unknown",
+        targetLanguage: "unknown"
+      };
+    }
   }
 
   updateApiKey(apiKey: string): void {
