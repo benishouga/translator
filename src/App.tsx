@@ -203,12 +203,19 @@ function App() {
   const handleMicrophoneSelect = () => {
     stopSystemAudio();
     setAudioInputMode('microphone');
+    // マイクロフォンに切り替える際、システム音声関連のエラーをクリア
+    setError("");
   };
 
   const handleSystemAudioStart = async () => {
+    // 試行開始時にエラーメッセージをクリア
+    setError("");
+    
     try {
       await startSystemAudio();
       setAudioInputMode('system');
+      // 成功時にエラーメッセージが残っていればクリア
+      setError("");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setError(errorMessage);

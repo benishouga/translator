@@ -79,11 +79,18 @@ export default function AudioInputSettings({
           <p className="text-xs text-blue-700 mb-2">
             💡 システム音声を選択すると、画面共有ダイアログが表示されます。
           </p>
-          <ul className="text-xs text-blue-600 space-y-1">
+          <ul className="text-xs text-blue-600 space-y-1 mb-3">
             <li>• 他のブラウザタブの音声を翻訳できます</li>
             <li>• YouTube、Netflix、会議アプリなどに対応</li>
             <li>• 音声付きのタブ/アプリを選択してください</li>
           </ul>
+          <button
+            onClick={onSystemAudioStart}
+            className="text-xs bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition-colors"
+            disabled={isTranslating}
+          >
+            再度システム音声を設定
+          </button>
         </div>
       )}
     </div>
