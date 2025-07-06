@@ -12,6 +12,11 @@ export interface VoiceRecognitionConfig {
   browserNoiseSuppression?: boolean; // ブラウザのノイズ抑制
   echoCancellation?: boolean; // エコーキャンセレーション
   autoGainControl?: boolean; // 自動音量調整
+  // システム音声用の高度な設定
+  maxRecordingDuration?: number; // 最大録音時間（ミリ秒）- BGM対策
+  speechPauseThreshold?: number; // 会話の自然な区切りを検出するしきい値
+  adaptiveSilenceDetection?: boolean; // 適応的無音検出を有効にする
+  backgroundMusicDetection?: boolean; // BGM検出を有効にする
 }
 
 export interface VoiceRecognitionCallbacks {
@@ -37,8 +42,15 @@ export class VoiceRecognitionService {
   private volumeVarianceHistory: number[] = [];
   private frequencyData: number[] = [];
   
+  // システム音声用の追加プロパティ
+  private maxRecordingTimer: number | null = null;
+  private lastLowVolumeTime: number = 0; // 最後に低音量が検出された時刻
+  private volumePattern: number[] = []; // 音量パターンの履歴
+  private speechPauseTimer: number | null = null;
+  private backgroundMusicLevel: number = 0; // 背景音楽の基準レベル
+  
   private config: VoiceRecognitionConfig = {
-    silenceThreshold: 0.01, // 1%の音量以下を無音とする
+    silenceThreshold: 0.03, // 1%の音量以下を無音とする
     silenceDuration: 1500, // 1.5秒の無音で区切り
     sampleRate: 44100,
     deviceId: undefined, // デフォルトデバイスを使用
@@ -48,7 +60,12 @@ export class VoiceRecognitionService {
     volumeStabilityThreshold: 0.01, // 音量変動の許容範囲
     browserNoiseSuppression: true, // ブラウザレベルのノイズ抑制を有効
     echoCancellation: true, // エコーキャンセレーションを有効
-    autoGainControl: true // 自動音量調整を有効
+    autoGainControl: true, // 自動音量調整を有効
+    // システム音声用の高度な設定
+    maxRecordingDuration: 15000, // 最大録音時間15秒（BGM対策）
+    speechPauseThreshold: 0.005, // 会話の自然な区切りを検出するしきい値
+    adaptiveSilenceDetection: true, // 適応的無音検出を有効
+    backgroundMusicDetection: true // BGM検出を有効
   };
   
   private readonly callbacks: VoiceRecognitionCallbacks = {};
@@ -158,6 +175,16 @@ export class VoiceRecognitionService {
       this.silenceTimer = null;
     }
 
+    if (this.speechPauseTimer) {
+      clearTimeout(this.speechPauseTimer);
+      this.speechPauseTimer = null;
+    }
+
+    if (this.maxRecordingTimer) {
+      clearTimeout(this.maxRecordingTimer);
+      this.maxRecordingTimer = null;
+    }
+
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
     }
@@ -178,8 +205,11 @@ export class VoiceRecognitionService {
     this.speechVolumeHistory = [];
     this.volumeVarianceHistory = [];
     this.frequencyData = [];
+    this.volumePattern = [];
     this.speechStartTime = 0;
     this.lastSpeechTime = 0;
+    this.lastLowVolumeTime = 0;
+    this.backgroundMusicLevel = 0;
   }
 
   private startVolumeMonitoring(): void {
@@ -223,10 +253,35 @@ export class VoiceRecognitionService {
   }
 
   private handleVolumeDetection(volume: number): void {
-    if (volume > this.config.silenceThreshold) {
+    // 音量パターンを記録（BGM検出用）
+    this.volumePattern.push(volume);
+    if (this.volumePattern.length > 100) {
+      this.volumePattern.shift();
+    }
+
+    // 背景音楽レベルを動的に調整
+    if (this.config.backgroundMusicDetection && this.volumePattern.length > 20) {
+      this.updateBackgroundMusicLevel();
+    }
+
+    // 適応的しきい値を使用
+    const adaptiveThreshold = this.getAdaptiveSilenceThreshold();
+    
+    if (volume > adaptiveThreshold) {
       this.handleSpeechDetected(volume);
-    } else if (this.isSpeaking && !this.silenceTimer) {
-      this.handleSilenceDetected();
+    } else {
+      // 低音量が検出された時の処理
+      const currentTime = Date.now();
+      
+      // 初回の低音量検出時、または連続する低音量でない場合は時刻を更新
+      if (this.lastLowVolumeTime === 0 || 
+          (this.lastSpeechTime > 0 && currentTime - this.lastSpeechTime < 200)) {
+        this.lastLowVolumeTime = currentTime;
+      }
+      
+      if (this.isSpeaking && !this.silenceTimer) {
+        this.handleSilenceDetected();
+      }
     }
   }
 
@@ -245,6 +300,14 @@ export class VoiceRecognitionService {
       if (this.mediaRecorder && this.mediaRecorder.state === 'inactive') {
         this.mediaRecorder.start();
       }
+
+      // 最大録音時間タイマーを設定（システム音声の場合）
+      if (this.config.customStream && this.config.maxRecordingDuration) {
+        this.maxRecordingTimer = window.setTimeout(() => {
+          console.log(`最大録音時間（${this.config.maxRecordingDuration}ms）に達しました。録音を停止します。`);
+          this.forceStopRecording();
+        }, this.config.maxRecordingDuration);
+      }
     }
     
     // 最後の音声検出時刻を更新
@@ -260,6 +323,17 @@ export class VoiceRecognitionService {
     if (this.silenceTimer) {
       clearTimeout(this.silenceTimer);
       this.silenceTimer = null;
+    }
+
+    // BGM環境での長時間録音チェック
+    if (this.shouldForceStopForBGM()) {
+      this.forceStopRecording();
+      return;
+    }
+
+    // 会話の自然な区切りを検出
+    if (this.config.customStream && this.shouldDetectSpeechPause(volume)) {
+      this.handleSpeechPauseDetection();
     }
   }
 
@@ -485,5 +559,127 @@ export class VoiceRecognitionService {
       isRecording: this.isRecording,
       isSpeaking: this.isSpeaking
     };
+  }
+
+  // 適応的無音しきい値を計算
+  private getAdaptiveSilenceThreshold(): number {
+    if (!this.config.adaptiveSilenceDetection || this.volumePattern.length < 20) {
+      return this.config.silenceThreshold;
+    }
+
+    // 最近の音量パターンから動的にしきい値を調整
+    const recentVolumes = this.volumePattern.slice(-50);
+    const avgVolume = recentVolumes.reduce((sum, vol) => sum + vol, 0) / recentVolumes.length;
+    const minVolume = Math.min(...recentVolumes);
+    
+    // 背景音楽がある場合は、基準しきい値を上げる
+    const baseThreshold = this.config.silenceThreshold;
+    const adaptiveThreshold = Math.max(baseThreshold, minVolume + (avgVolume - minVolume) * 0.3);
+    
+    return Math.min(adaptiveThreshold, baseThreshold * 3); // 最大でも基準値の3倍まで
+  }
+
+  // 背景音楽レベルを更新
+  private updateBackgroundMusicLevel(): void {
+    const recentVolumes = this.volumePattern.slice(-50);
+    const sortedVolumes = [...recentVolumes].sort((a, b) => a - b);
+    
+    // 下位25%の音量を背景音楽レベルとして設定
+    const lowerQuartileIndex = Math.floor(sortedVolumes.length * 0.25);
+    this.backgroundMusicLevel = sortedVolumes[lowerQuartileIndex] || 0;
+  }
+
+  // 強制録音停止
+  private forceStopRecording(): void {
+    if (this.maxRecordingTimer) {
+      clearTimeout(this.maxRecordingTimer);
+      this.maxRecordingTimer = null;
+    }
+
+    if (this.isSpeaking && this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.isSpeaking = false;
+      this.mediaRecorder.stop();
+    }
+  }
+
+  // 会話の自然な区切りを検出すべきかチェック
+  private shouldDetectSpeechPause(volume: number): boolean {
+    if (!this.config.speechPauseThreshold) return false;
+    
+    const currentTime = Date.now();
+    const recordingDuration = currentTime - this.speechStartTime;
+    
+    // 録音時間が5秒以上の場合のみ会話区切りを検出
+    if (recordingDuration < 5000) return false;
+    
+    // 音量が会話区切りしきい値より低い場合
+    const pauseThreshold = this.config.speechPauseThreshold;
+    const isLowVolume = volume < pauseThreshold && volume > this.backgroundMusicLevel;
+    
+    // 低音量が一定時間続いているかチェック
+    if (isLowVolume) {
+      const lowVolumeDuration = currentTime - this.lastLowVolumeTime;
+      // 低音量が1秒以上続いている場合に区切り候補とする
+      return lowVolumeDuration >= 1000;
+    }
+    
+    return false;
+  }
+
+  // 会話の区切り検出処理
+  private handleSpeechPauseDetection(): void {
+    if (this.speechPauseTimer) return; // 既にタイマーが設定されている場合は何もしない
+    
+    // 短時間（800ms）の低音量が続いた場合に録音を区切る
+    this.speechPauseTimer = window.setTimeout(() => {
+      const currentTime = Date.now();
+      const timeSinceLastSpeech = currentTime - this.lastSpeechTime;
+      const timeSinceLastLowVolume = currentTime - this.lastLowVolumeTime;
+      
+      // 最後の音声検出から800ms経過していて、かつ録音時間が8秒以上の場合
+      // または、低音量が2秒以上続いている場合
+      const shouldStopByTime = timeSinceLastSpeech >= 800 && (currentTime - this.speechStartTime) >= 8000;
+      const shouldStopByLowVolume = timeSinceLastLowVolume >= 2000 && (currentTime - this.speechStartTime) >= 6000;
+      
+      if (shouldStopByTime || shouldStopByLowVolume) {
+        console.log(`会話の自然な区切りを検出しました。録音を停止します。`);
+        console.log(`- 音声からの経過時間: ${timeSinceLastSpeech}ms`);
+        console.log(`- 低音量からの経過時間: ${timeSinceLastLowVolume}ms`);
+        console.log(`- 録音継続時間: ${currentTime - this.speechStartTime}ms`);
+        this.forceStopRecording();
+      }
+      
+      this.speechPauseTimer = null;
+    }, 800);
+  }
+
+  // BGM環境での長時間録音を防ぐ追加チェック
+  private shouldForceStopForBGM(): boolean {
+    if (!this.config.customStream) return false;
+    
+    const currentTime = Date.now();
+    const recordingDuration = currentTime - this.speechStartTime;
+    const timeSinceLastSpeech = currentTime - this.lastSpeechTime;
+    const timeSinceLastLowVolume = currentTime - this.lastLowVolumeTime;
+    
+    // 録音時間が20秒を超えた場合
+    if (recordingDuration > 20000) {
+      console.log("録音時間が20秒を超えました。強制停止します。");
+      return true;
+    }
+    
+    // 実際の音声が少なく、BGMが主体の場合
+    if (recordingDuration > 10000 && timeSinceLastSpeech > 3000) {
+      console.log("BGMが主体の録音と判定されました。強制停止します。");
+      return true;
+    }
+    
+    // 低音量が長時間続いている場合（BGMのみの状態）
+    if (timeSinceLastLowVolume > 4000 && recordingDuration > 8000) {
+      console.log("低音量が長時間続いています。強制停止します。");
+      return true;
+    }
+    
+    return false;
   }
 }

@@ -64,6 +64,14 @@ export default function AudioInputSettings({
           <p className="text-xs text-green-600 mb-2">
             選択したアプリ/タブの音声がリアルタイムで翻訳されます
           </p>
+          <div className="text-xs text-green-600 mb-2">
+            <p className="font-semibold">🎵 動画・音楽コンテンツでの最適化:</p>
+            <ul className="mt-1 space-y-1 text-green-500">
+              <li>• BGMや効果音を考慮した適応的音声検出</li>
+              <li>• 最大15秒で自動区切り（長すぎる録音を防止）</li>
+              <li>• 会話の自然な区切りを検出</li>
+            </ul>
+          </div>
           <button
             onClick={onSystemAudioStop}
             className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors"
@@ -83,6 +91,7 @@ export default function AudioInputSettings({
             <li>• 他のブラウザタブの音声を翻訳できます</li>
             <li>• YouTube、Netflix、会議アプリなどに対応</li>
             <li>• 音声付きのタブ/アプリを選択してください</li>
+            <li>• BGMや効果音がある動画でも適切に音声を区切ります</li>
           </ul>
           <button
             onClick={onSystemAudioStart}

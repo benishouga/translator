@@ -46,18 +46,23 @@ function App() {
           sourceLanguage: sourceLanguage || undefined,
           enableAutoSpeak: enableAutoSpeak,
           voiceConfig: {
-            silenceThreshold: 0.01,
-            silenceDuration: 1000,
+            silenceThreshold: audioInputMode === 'system' ? 0.005 : 0.01,
+            silenceDuration: audioInputMode === 'system' ? 2500 : 1000,
             sampleRate: 44100,
             deviceId: audioInputMode === 'microphone' ? (selectedDeviceId || undefined) : undefined,
             noiseFilterEnabled: noiseFilterEnabled,
-            minSpeechVolume: 0.02,
-            minSpeechDuration: 600,
+            minSpeechVolume: audioInputMode === 'system' ? 0.008 : 0.02,
+            minSpeechDuration: audioInputMode === 'system' ? 1000 : 600,
             volumeStabilityThreshold: 0.01,
             customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined,
             browserNoiseSuppression: browserNoiseSuppression,
             echoCancellation: echoCancellation,
-            autoGainControl: autoGainControl
+            autoGainControl: autoGainControl,
+            // システム音声用の高度な設定
+            maxRecordingDuration: audioInputMode === 'system' ? 12000 : undefined,
+            speechPauseThreshold: audioInputMode === 'system' ? 0.006 : undefined,
+            adaptiveSilenceDetection: audioInputMode === 'system',
+            backgroundMusicDetection: audioInputMode === 'system'
           },
           ttsConfig: {
             model: 'tts-1',
@@ -129,15 +134,23 @@ function App() {
         sourceLanguage: sourceLanguage || undefined,
         enableAutoSpeak: enableAutoSpeak,
         voiceConfig: {
-          silenceThreshold: 0.01,
-          silenceDuration: 1000,
+          silenceThreshold: audioInputMode === 'system' ? 0.005 : 0.01,
+          silenceDuration: audioInputMode === 'system' ? 2000 : 1000,
           sampleRate: 44100,
           deviceId: audioInputMode === 'microphone' ? (selectedDeviceId || undefined) : undefined,
           noiseFilterEnabled: noiseFilterEnabled,
-          minSpeechVolume: 0.02,
-          minSpeechDuration: 600,
+          minSpeechVolume: audioInputMode === 'system' ? 0.01 : 0.02,
+          minSpeechDuration: audioInputMode === 'system' ? 800 : 600,
           volumeStabilityThreshold: 0.01,
-          customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined
+          customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined,
+          browserNoiseSuppression: browserNoiseSuppression,
+          echoCancellation: echoCancellation,
+          autoGainControl: autoGainControl,
+          // システム音声用の高度な設定
+          maxRecordingDuration: audioInputMode === 'system' ? 15000 : undefined,
+          speechPauseThreshold: audioInputMode === 'system' ? 0.005 : undefined,
+          adaptiveSilenceDetection: audioInputMode === 'system',
+          backgroundMusicDetection: audioInputMode === 'system'
         }
       });
     }
