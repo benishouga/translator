@@ -166,6 +166,13 @@ export class TextToSpeechService {
     this.apiKey = apiKey;
   }
 
+  updateConfig(newConfig: Partial<TextToSpeechConfig>): void {
+    if (newConfig.apiKey) {
+      this.apiKey = newConfig.apiKey;
+    }
+    // model と voice は readonly なので、再作成が必要な場合は別途対応
+  }
+
   updateVoice(_voice: string): void {
     // 新しいインスタンスを作成する必要があるため、この設定は即座には反映されません
     console.warn("音声の変更は次回のインスタンス作成時に反映されます");

@@ -179,24 +179,25 @@ export class RealTimeTranslatorService {
   }
 
   // 設定を更新
-  updateConfig(config: Partial<TranslatorConfig>): void {
-    this.config = { ...this.config, ...config };
+  updateConfig(newConfig: Partial<TranslatorConfig>): void {
+    // 設定を更新
+    this.config = { ...this.config, ...newConfig };
     
     // APIキーの更新
-    if (config.apiKey) {
-      this.speechToTextService.updateApiKey(config.apiKey);
-      this.translationService.updateApiKey(config.apiKey);
-      this.textToSpeechService.updateApiKey(config.apiKey);
-    }
-    
-    // 言語の更新
-    if (config.sourceLanguage !== undefined) {
-      this.speechToTextService.updateLanguage(config.sourceLanguage);
+    if (newConfig.apiKey) {
+      this.speechToTextService.updateApiKey(newConfig.apiKey);
+      this.translationService.updateApiKey(newConfig.apiKey);
+      this.textToSpeechService.updateApiKey(newConfig.apiKey);
     }
     
     // 音声認識設定の更新
-    if (config.voiceConfig) {
-      this.voiceService.updateConfig(config.voiceConfig);
+    if (newConfig.voiceConfig) {
+      this.voiceService.updateConfig(newConfig.voiceConfig);
+    }
+    
+    // TTS設定の更新
+    if (newConfig.ttsConfig) {
+      this.textToSpeechService.updateConfig(newConfig.ttsConfig);
     }
   }
 

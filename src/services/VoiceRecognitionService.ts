@@ -7,6 +7,7 @@ export interface VoiceRecognitionConfig {
   minSpeechVolume?: number; // 有効な音声とみなす最小音量
   minSpeechDuration?: number; // 有効な音声とみなす最小継続時間（ミリ秒）
   volumeStabilityThreshold?: number; // 音量の安定性を判定するしきい値
+  customStream?: MediaStream; // 外部から提供されるMediaStream（システム音声等）
 }
 
 export interface VoiceRecognitionCallbacks {
@@ -56,18 +57,39 @@ export class VoiceRecognitionService {
 
   async startListening(): Promise<void> {
     try {
-      // マイクへのアクセス許可を取得
-      const constraints: MediaStreamConstraints = {
-        audio: {
-          sampleRate: this.config.sampleRate,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          ...(this.config.deviceId && { deviceId: { exact: this.config.deviceId } })
-        }
-      };
+      let stream: MediaStream;
       
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // カスタムストリームが提供されている場合はそれを使用
+      if (this.config.customStream) {
+        stream = this.config.customStream;
+        
+        // ストリームの状態を確認
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length === 0) {
+          throw new Error("カスタムストリームに音声トラックが含まれていません");
+        }
+        
+        const activeAudioTracks = audioTracks.filter(track => track.readyState === 'live');
+        if (activeAudioTracks.length === 0) {
+          throw new Error("カスタムストリームの音声トラックがアクティブではありません");
+        }
+        
+        console.log(`外部提供のMediaStreamを使用します（音声トラック: ${activeAudioTracks.length}個）`);
+      } else {
+        // マイクへのアクセス許可を取得
+        const constraints: MediaStreamConstraints = {
+          audio: {
+            sampleRate: this.config.sampleRate,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            ...(this.config.deviceId && { deviceId: { exact: this.config.deviceId } })
+          }
+        };
+        
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log("マイクからのMediaStreamを使用します");
+      }
 
       // AudioContextを初期化
       this.audioContext = new AudioContext();
@@ -75,7 +97,7 @@ export class VoiceRecognitionService {
       this.analyser.fftSize = 256;
       this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
       
-      // マイクからの音声をAnalyserに接続
+      // 音声源をAnalyserに接続
       this.microphone = this.audioContext.createMediaStreamSource(stream);
       this.microphone.connect(this.analyser);
 
@@ -272,8 +294,8 @@ export class VoiceRecognitionService {
   }
 
   // 設定を更新
-  updateConfig(config: Partial<VoiceRecognitionConfig>): void {
-    this.config = { ...this.config, ...config };
+  updateConfig(newConfig: Partial<VoiceRecognitionConfig>): void {
+    this.config = { ...this.config, ...newConfig };
   }
 
   // 有効な音声かどうかを判定

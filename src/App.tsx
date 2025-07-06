@@ -17,6 +17,8 @@ function App() {
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [noiseFilterEnabled, setNoiseFilterEnabled] = useState<boolean>(true);
+  const [audioInputMode, setAudioInputMode] = useState<'microphone' | 'system'>('microphone');
+  const [systemAudioStream, setSystemAudioStream] = useState<MediaStream | null>(null);
   
   const translatorServiceRef = useRef<RealTimeTranslatorService | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
@@ -49,97 +51,127 @@ function App() {
   }, [selectedDeviceId]);
 
   useEffect(() => {
-    // RealTimeTranslatorServiceを初期化
-    translatorServiceRef.current = new RealTimeTranslatorService(
-      {
+    // RealTimeTranslatorServiceを初期化（初回のみ）
+    if (!translatorServiceRef.current) {
+      translatorServiceRef.current = new RealTimeTranslatorService(
+        {
+          apiKey: apiKey,
+          sourceLanguage: sourceLanguage || undefined,
+          enableAutoSpeak: true,
+          voiceConfig: {
+            silenceThreshold: 0.01,
+            silenceDuration: 1000,
+            sampleRate: 44100,
+            deviceId: audioInputMode === 'microphone' ? (selectedDeviceId || undefined) : undefined,
+            noiseFilterEnabled: noiseFilterEnabled,
+            minSpeechVolume: 0.02,
+            minSpeechDuration: 600,
+            volumeStabilityThreshold: 0.01,
+            customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined
+          },
+          ttsConfig: {
+            model: 'gpt-4o-mini-tts',
+            voice: 'alloy',
+          }
+        },
+        {
+          onSpeechStart: () => {
+            console.log("音声検出開始");
+            setSpeechText("音声を検出中...");
+          },
+          onSpeechProcessing: () => {
+            console.log("音声処理中");
+            setSpeechText("音声を処理中...");
+            setIsProcessing(true);
+          },
+          onSpeechRecognized: (text) => {
+            console.log("音声認識完了:", text);
+            const newMessage: ChatMessage = {
+              id: Date.now().toString(),
+              text: text,
+              timestamp: new Date(),
+              type: 'user'
+            };
+            setChatHistory(prev => [...prev, newMessage]);
+            setSpeechText("");
+            setIsProcessing(false);
+          },
+          onTranslationComplete: (result) => {
+            console.log("翻訳完了:", result);
+            const translationMessage: ChatMessage = {
+              id: `trans-${Date.now()}`,
+              text: result.translatedText,
+              timestamp: new Date(),
+              type: 'translation',
+              originalText: result.originalText,
+              sourceLanguage: result.sourceLanguage,
+              targetLanguage: result.targetLanguage
+            };
+            setChatHistory(prev => [...prev, translationMessage]);
+          },
+          onAudioStart: () => {
+            console.log("音声出力開始");
+          },
+          onAudioEnd: () => {
+            console.log("音声出力終了");
+          },
+          onError: (errorMessage) => {
+            console.error("音声認識エラー:", errorMessage);
+            setError(errorMessage);
+            setIsListening(false);
+            setIsProcessing(false);
+          },
+          onVolumeChange: (vol) => {
+            setVolume(vol);
+          },
+          onStatusChange: (status) => {
+            setIsListening(status.isListening);
+            setIsProcessing(status.isProcessing);
+            if (status.currentText) {
+              setSpeechText(status.currentText);
+            }
+          }
+        }
+      );
+    } else {
+      // 既に作成済みの場合は設定のみ更新
+      translatorServiceRef.current.updateConfig({
         apiKey: apiKey,
         sourceLanguage: sourceLanguage || undefined,
-        enableAutoSpeak: true, // 自動音声出力を有効にする
         voiceConfig: {
           silenceThreshold: 0.01,
           silenceDuration: 1000,
           sampleRate: 44100,
-          deviceId: selectedDeviceId || undefined,
-          noiseFilterEnabled: noiseFilterEnabled, // ノイズフィルタリング設定
-          minSpeechVolume: 0.02, // 最小音声音量を2%に設定
-          minSpeechDuration: 600, // 最小音声継続時間を600msに延長（咳払い除去）
-          volumeStabilityThreshold: 0.01 // 音量変動の閾値を調整
-        },
-        ttsConfig: {
-          model: 'gpt-4o-mini-tts',
-          voice: 'alloy',
+          deviceId: audioInputMode === 'microphone' ? (selectedDeviceId || undefined) : undefined,
+          noiseFilterEnabled: noiseFilterEnabled,
+          minSpeechVolume: 0.02,
+          minSpeechDuration: 600,
+          volumeStabilityThreshold: 0.01,
+          customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined
         }
-      },
-      {
-        onSpeechStart: () => {
-          console.log("音声検出開始");
-          setSpeechText("音声を検出中...");
-        },
-        onSpeechProcessing: () => {
-          console.log("音声処理中");
-          setSpeechText("音声を処理中...");
-          setIsProcessing(true);
-        },
-        onSpeechRecognized: (text) => {
-          console.log("音声認識完了:", text);
-          const newMessage: ChatMessage = {
-            id: Date.now().toString(),
-            text: text,
-            timestamp: new Date(),
-            type: 'user'
-          };
-          setChatHistory(prev => [...prev, newMessage]);
-          setSpeechText("");
-          setIsProcessing(false);
-        },
-        onTranslationComplete: (result) => {
-          console.log("翻訳完了:", result);
-          const translationMessage: ChatMessage = {
-            id: `trans-${Date.now()}`,
-            text: result.translatedText,
-            timestamp: new Date(),
-            type: 'translation',
-            originalText: result.originalText,
-            sourceLanguage: result.sourceLanguage,
-            targetLanguage: result.targetLanguage
-          };
-          setChatHistory(prev => [...prev, translationMessage]);
-        },
-        onAudioStart: () => {
-          console.log("音声出力開始");
-        },
-        onAudioEnd: () => {
-          console.log("音声出力終了");
-        },
-        onError: (errorMessage) => {
-          console.error("音声認識エラー:", errorMessage);
-          setError(errorMessage);
-          setIsListening(false);
-          setIsProcessing(false);
-        },
-        onVolumeChange: (vol) => {
-          setVolume(vol);
-        },
-        onStatusChange: (status) => {
-          setIsListening(status.isListening);
-          setIsProcessing(status.isProcessing);
-          if (status.currentText) {
-            setSpeechText(status.currentText);
-          }
-        }
-      }
-    );
+      });
+    }
 
     return () => {
       if (translatorServiceRef.current) {
         translatorServiceRef.current.destroy();
       }
+      // システム音声のクリーンアップ
+      if (systemAudioStream) {
+        systemAudioStream.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled]);
+  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled, audioInputMode, systemAudioStream]);
 
   const handleStartTranslation = async () => {
     if (!apiKey.trim()) {
       alert("APIキーを入力してください");
+      return;
+    }
+
+    // システム音声モードでストリームが取得できていない場合の処理
+    if (audioInputMode === 'system' && !systemAudioStream) {
+      setError("システム音声が設定されていません。音声入力モードを「マイクロフォン」に変更するか、システム音声を選択してください。");
       return;
     }
     
@@ -150,20 +182,28 @@ function App() {
       if (translatorServiceRef.current) {
         await translatorServiceRef.current.startListening();
         setIsListening(true);
-        console.log("翻訳を開始しました");
         
-        // マイクアクセス許可後にデバイスリストを更新
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const audioInputs = devices.filter(device => device.kind === 'audioinput');
-          setAudioDevices(audioInputs);
-        } catch (deviceError) {
-          console.warn("デバイスリストの更新に失敗:", deviceError);
+        if (audioInputMode === 'microphone') {
+          console.log("マイクからの翻訳を開始しました");
+        } else {
+          console.log("システム音声からの翻訳を開始しました");
+        }
+        
+        // マイクアクセス許可後にデバイスリストを更新（マイクモードのみ）
+        if (audioInputMode === 'microphone') {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(device => device.kind === 'audioinput');
+            setAudioDevices(audioInputs);
+          } catch (deviceError) {
+            console.warn("デバイスリストの更新に失敗:", deviceError);
+          }
         }
       }
     } catch (error) {
-      console.error("マイクアクセスエラー:", error);
-      setError("マイクへのアクセスに失敗しました");
+      console.error("音声入力のアクセスエラー:", error);
+      const inputType = audioInputMode === 'system' ? 'システム音声' : 'マイク';
+      setError(`${inputType}へのアクセスに失敗しました`);
       setIsTranslating(false);
     }
   };
@@ -215,6 +255,87 @@ function App() {
     }
   };
 
+  const handleSystemAudioStart = async () => {
+    try {
+      // システム音声がサポートされているかチェック
+      if (!navigator.mediaDevices.getDisplayMedia) {
+        throw new Error("このブラウザはシステム音声をサポートしていません");
+      }
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({ 
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 44100
+        }, 
+        video: {
+          width: { ideal: 1 }, // 最小限のビデオ設定
+          height: { ideal: 1 }
+        }
+      });
+      
+      // 音声トラックのみを取得
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        // ビデオトラックを停止してリソースを解放
+        stream.getVideoTracks().forEach(track => track.stop());
+        throw new Error("選択されたコンテンツに音声が含まれていません。\n音声付きのアプリケーションやタブを選択してください。");
+      }
+      
+      // 新しいMediaStreamを作成（音声のみ）
+      const audioStream = new MediaStream(audioTracks);
+      setSystemAudioStream(audioStream);
+      setAudioInputMode('system');
+      
+      console.log("システム音声の取得に成功しました");
+      
+      // 画面共有が停止された時のクリーンアップ
+      const allTracks = [...stream.getVideoTracks(), ...audioTracks];
+      allTracks.forEach(track => {
+        track.onended = () => {
+          console.log("システム音声共有が終了されました");
+          handleSystemAudioStop();
+        };
+      });
+      
+      // ビデオトラックは不要なので停止
+      stream.getVideoTracks().forEach(track => track.stop());
+      
+    } catch (error) {
+      console.error("システム音声の取得に失敗:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          setError("画面共有が拒否されました。システム音声を使用するには画面共有を許可してください。");
+        } else if (error.name === 'NotSupportedError') {
+          setError("このブラウザではシステム音声機能がサポートされていません。");
+        } else {
+          setError(`システム音声の取得に失敗: ${errorMessage}`);
+        }
+      } else {
+        setError(`システム音声の取得に失敗: ${errorMessage}`);
+      }
+      setAudioInputMode('microphone');
+    }
+  };
+
+  const handleSystemAudioStop = () => {
+    if (systemAudioStream) {
+      systemAudioStream.getTracks().forEach(track => track.stop());
+      setSystemAudioStream(null);
+    }
+    setAudioInputMode('microphone');
+    
+    // 翻訳中の場合は停止
+    if (isTranslating) {
+      handleStopTranslation();
+    }
+    
+    console.log("システム音声を停止しました");
+  };
+
   return (
     <div className="app min-h-screen bg-gray-50 p-4">
       <div className="max-w-6xl mx-auto">
@@ -258,6 +379,76 @@ function App() {
                 </div>
 
                 <div>
+                  <span className="block text-sm font-medium mb-2 text-gray-600">
+                    音声入力モード:
+                  </span>
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="audioInputMode"
+                        value="microphone"
+                        checked={audioInputMode === 'microphone'}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            handleSystemAudioStop(); // システム音声を停止
+                            setAudioInputMode('microphone');
+                          }
+                        }}
+                        className="text-blue-600 focus:ring-blue-500"
+                        disabled={isTranslating}
+                      />
+                      <span className="text-sm">マイクロフォン</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="audioInputMode"
+                        value="system"
+                        checked={audioInputMode === 'system'}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            handleSystemAudioStart();
+                          }
+                        }}
+                        className="text-blue-600 focus:ring-blue-500"
+                        disabled={isTranslating}
+                      />
+                      <span className="text-sm">システム音声（他のアプリ/ブラウザタブ）</span>
+                    </label>
+                  </div>
+                  {audioInputMode === 'system' && systemAudioStream && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <p className="text-xs text-green-700 mb-2">
+                        ✓ システム音声が接続されています
+                      </p>
+                      <p className="text-xs text-green-600 mb-2">
+                        選択したアプリ/タブの音声がリアルタイムで翻訳されます
+                      </p>
+                      <button
+                        onClick={handleSystemAudioStop}
+                        className="text-xs bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors"
+                        disabled={isTranslating}
+                      >
+                        システム音声を停止
+                      </button>
+                    </div>
+                  )}
+                  {audioInputMode === 'system' && !systemAudioStream && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-xs text-blue-700 mb-2">
+                        💡 システム音声を選択すると、画面共有ダイアログが表示されます。
+                      </p>
+                      <ul className="text-xs text-blue-600 space-y-1">
+                        <li>• 他のブラウザタブの音声を翻訳できます</li>
+                        <li>• YouTube、Netflix、会議アプリなどに対応</li>
+                        <li>• 音声付きのタブ/アプリを選択してください</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: audioInputMode === 'microphone' ? 'block' : 'none' }}>
                   <label htmlFor="micDevice" className="block text-sm font-medium mb-2 text-gray-600">
                     マイクデバイス:
                   </label>
@@ -397,12 +588,21 @@ function App() {
             {isListening && (
               <div className="bg-blue-50 rounded-lg shadow-md p-6 border border-blue-200">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-lg font-semibold text-blue-700">音声認識中</span>
+                  <span className="text-lg font-semibold text-blue-700">
+                    {audioInputMode === 'system' ? 'システム音声認識中' : '音声認識中'}
+                  </span>
                   <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-3"></div>
-                    <span className="text-sm text-blue-600 font-medium">音量: {Math.round(volume * 100)}%</span>
+                    <span className="text-sm text-blue-600 font-medium">
+                      音量: {Math.round(volume * 100)}%
+                    </span>
                   </div>
                 </div>
+                {audioInputMode === 'system' && (
+                  <div className="text-xs text-blue-600 mb-2">
+                    💡 選択したアプリ/タブの音声を認識中です
+                  </div>
+                )}
                 {speechText && (
                   <div className="text-sm text-gray-700 bg-white p-3 rounded border border-blue-100">
                     {speechText}
