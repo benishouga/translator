@@ -8,6 +8,10 @@ export interface VoiceRecognitionConfig {
   minSpeechDuration?: number; // 有効な音声とみなす最小継続時間（ミリ秒）
   volumeStabilityThreshold?: number; // 音量の安定性を判定するしきい値
   customStream?: MediaStream; // 外部から提供されるMediaStream（システム音声等）
+  // ブラウザレベルのノイズ抑制設定
+  browserNoiseSuppression?: boolean; // ブラウザのノイズ抑制
+  echoCancellation?: boolean; // エコーキャンセレーション
+  autoGainControl?: boolean; // 自動音量調整
 }
 
 export interface VoiceRecognitionCallbacks {
@@ -41,7 +45,10 @@ export class VoiceRecognitionService {
     noiseFilterEnabled: true, // ノイズフィルタリングを有効
     minSpeechVolume: 0.02, // 有効な音声の最小音量（2%）
     minSpeechDuration: 600, // 有効な音声の最小継続時間（600ms - 咳払い除去）
-    volumeStabilityThreshold: 0.01 // 音量変動の許容範囲
+    volumeStabilityThreshold: 0.01, // 音量変動の許容範囲
+    browserNoiseSuppression: true, // ブラウザレベルのノイズ抑制を有効
+    echoCancellation: true, // エコーキャンセレーションを有効
+    autoGainControl: true // 自動音量調整を有効
   };
   
   private readonly callbacks: VoiceRecognitionCallbacks = {};
@@ -81,8 +88,9 @@ export class VoiceRecognitionService {
           audio: {
             sampleRate: this.config.sampleRate,
             channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
+            echoCancellation: this.config.echoCancellation ?? true,
+            noiseSuppression: this.config.browserNoiseSuppression ?? true,
+            autoGainControl: this.config.autoGainControl ?? true,
             ...(this.config.deviceId && { deviceId: { exact: this.config.deviceId } })
           }
         };

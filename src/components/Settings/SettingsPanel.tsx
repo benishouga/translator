@@ -2,6 +2,7 @@ import ApiKeyInput from './ApiKeyInput';
 import LanguageSelector from './LanguageSelector';
 import AudioInputSettings from './AudioInputSettings';
 import MicrophoneSettings from './MicrophoneSettings';
+import BrowserAudioSettings from './BrowserAudioSettings';
 
 interface SettingsPanelProps {
   readonly apiKey: string;
@@ -11,6 +12,9 @@ interface SettingsPanelProps {
   readonly audioDevices: MediaDeviceInfo[];
   readonly selectedDeviceId: string;
   readonly noiseFilterEnabled: boolean;
+  readonly browserNoiseSuppression: boolean;
+  readonly echoCancellation: boolean;
+  readonly autoGainControl: boolean;
   readonly isTranslating: boolean;
   readonly onApiKeyChange: (apiKey: string) => void;
   readonly onSourceLanguageChange: (language: string) => void;
@@ -19,6 +23,9 @@ interface SettingsPanelProps {
   readonly onSystemAudioStop: () => void;
   readonly onDeviceChange: (deviceId: string) => void;
   readonly onNoiseFilterToggle: (enabled: boolean) => void;
+  readonly onBrowserNoiseSuppressionChange: (enabled: boolean) => void;
+  readonly onEchoCancellationChange: (enabled: boolean) => void;
+  readonly onAutoGainControlChange: (enabled: boolean) => void;
 }
 
 export default function SettingsPanel({
@@ -29,6 +36,9 @@ export default function SettingsPanel({
   audioDevices,
   selectedDeviceId,
   noiseFilterEnabled,
+  browserNoiseSuppression,
+  echoCancellation,
+  autoGainControl,
   isTranslating,
   onApiKeyChange,
   onSourceLanguageChange,
@@ -36,7 +46,10 @@ export default function SettingsPanel({
   onSystemAudioStart,
   onSystemAudioStop,
   onDeviceChange,
-  onNoiseFilterToggle
+  onNoiseFilterToggle,
+  onBrowserNoiseSuppressionChange,
+  onEchoCancellationChange,
+  onAutoGainControlChange
 }: SettingsPanelProps) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -73,6 +86,18 @@ export default function SettingsPanel({
             onDeviceChange={onDeviceChange}
             onNoiseFilterToggle={onNoiseFilterToggle}
           />
+          
+          <div className="mt-4">
+            <BrowserAudioSettings
+              browserNoiseSuppression={browserNoiseSuppression}
+              echoCancellation={echoCancellation}
+              autoGainControl={autoGainControl}
+              isTranslating={isTranslating}
+              onBrowserNoiseSuppressionChange={onBrowserNoiseSuppressionChange}
+              onEchoCancellationChange={onEchoCancellationChange}
+              onAutoGainControlChange={onAutoGainControlChange}
+            />
+          </div>
         </div>
       </div>
     </div>

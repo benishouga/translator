@@ -22,6 +22,11 @@ function App() {
   const [noiseFilterEnabled, setNoiseFilterEnabled] = useState<boolean>(true);
   const [audioInputMode, setAudioInputMode] = useState<'microphone' | 'system'>('microphone');
   
+  // ブラウザ音声処理設定
+  const [browserNoiseSuppression, setBrowserNoiseSuppression] = useState<boolean>(true);
+  const [echoCancellation, setEchoCancellation] = useState<boolean>(true);
+  const [autoGainControl, setAutoGainControl] = useState<boolean>(true);
+  
   // カスタムフック
   const { audioDevices, selectedDeviceId, setSelectedDeviceId, updateAudioDevices } = useAudioDevices();
   const { systemAudioStream, startSystemAudio, stopSystemAudio } = useSystemAudio();
@@ -46,7 +51,10 @@ function App() {
             minSpeechVolume: 0.02,
             minSpeechDuration: 600,
             volumeStabilityThreshold: 0.01,
-            customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined
+            customStream: audioInputMode === 'system' ? systemAudioStream || undefined : undefined,
+            browserNoiseSuppression: browserNoiseSuppression,
+            echoCancellation: echoCancellation,
+            autoGainControl: autoGainControl
           },
           ttsConfig: {
             model: 'tts-1',
@@ -138,7 +146,7 @@ function App() {
         systemAudioStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled, audioInputMode, systemAudioStream]);
+  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled, audioInputMode, systemAudioStream, browserNoiseSuppression, echoCancellation, autoGainControl]);
 
   // イベントハンドラー
   const handleStartTranslation = async () => {
@@ -258,6 +266,9 @@ function App() {
               audioDevices={audioDevices}
               selectedDeviceId={selectedDeviceId}
               noiseFilterEnabled={noiseFilterEnabled}
+              browserNoiseSuppression={browserNoiseSuppression}
+              echoCancellation={echoCancellation}
+              autoGainControl={autoGainControl}
               isTranslating={isTranslating}
               onApiKeyChange={setApiKey}
               onSourceLanguageChange={setSourceLanguage}
@@ -266,6 +277,9 @@ function App() {
               onSystemAudioStop={handleSystemAudioStop}
               onDeviceChange={setSelectedDeviceId}
               onNoiseFilterToggle={setNoiseFilterEnabled}
+              onBrowserNoiseSuppressionChange={setBrowserNoiseSuppression}
+              onEchoCancellationChange={setEchoCancellation}
+              onAutoGainControlChange={setAutoGainControl}
             />
             
             <ControlPanel
