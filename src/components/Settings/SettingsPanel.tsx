@@ -3,6 +3,7 @@ import LanguageSelector from './LanguageSelector';
 import AudioInputSettings from './AudioInputSettings';
 import MicrophoneSettings from './MicrophoneSettings';
 import BrowserAudioSettings from './BrowserAudioSettings';
+import AudioOutputSettings from './AudioOutputSettings';
 
 interface SettingsPanelProps {
   readonly apiKey: string;
@@ -15,6 +16,7 @@ interface SettingsPanelProps {
   readonly browserNoiseSuppression: boolean;
   readonly echoCancellation: boolean;
   readonly autoGainControl: boolean;
+  readonly enableAutoSpeak: boolean;
   readonly isTranslating: boolean;
   readonly onApiKeyChange: (apiKey: string) => void;
   readonly onSourceLanguageChange: (language: string) => void;
@@ -26,6 +28,7 @@ interface SettingsPanelProps {
   readonly onBrowserNoiseSuppressionChange: (enabled: boolean) => void;
   readonly onEchoCancellationChange: (enabled: boolean) => void;
   readonly onAutoGainControlChange: (enabled: boolean) => void;
+  readonly onAutoSpeakToggle: (enabled: boolean) => void;
 }
 
 export default function SettingsPanel({
@@ -39,6 +42,7 @@ export default function SettingsPanel({
   browserNoiseSuppression,
   echoCancellation,
   autoGainControl,
+  enableAutoSpeak,
   isTranslating,
   onApiKeyChange,
   onSourceLanguageChange,
@@ -49,7 +53,8 @@ export default function SettingsPanel({
   onNoiseFilterToggle,
   onBrowserNoiseSuppressionChange,
   onEchoCancellationChange,
-  onAutoGainControlChange
+  onAutoGainControlChange,
+  onAutoSpeakToggle
 }: SettingsPanelProps) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -99,6 +104,12 @@ export default function SettingsPanel({
             />
           </div>
         </div>
+        
+        <AudioOutputSettings
+          enableAutoSpeak={enableAutoSpeak}
+          isTranslating={isTranslating}
+          onAutoSpeakToggle={onAutoSpeakToggle}
+        />
       </div>
     </div>
   );

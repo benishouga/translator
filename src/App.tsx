@@ -27,6 +27,9 @@ function App() {
   const [echoCancellation, setEchoCancellation] = useState<boolean>(true);
   const [autoGainControl, setAutoGainControl] = useState<boolean>(true);
   
+  // 音声出力設定
+  const [enableAutoSpeak, setEnableAutoSpeak] = useState<boolean>(true);
+  
   // カスタムフック
   const { audioDevices, selectedDeviceId, setSelectedDeviceId, updateAudioDevices } = useAudioDevices();
   const { systemAudioStream, startSystemAudio, stopSystemAudio } = useSystemAudio();
@@ -41,7 +44,7 @@ function App() {
         {
           apiKey: apiKey,
           sourceLanguage: sourceLanguage || undefined,
-          enableAutoSpeak: true,
+          enableAutoSpeak: enableAutoSpeak,
           voiceConfig: {
             silenceThreshold: 0.01,
             silenceDuration: 1000,
@@ -124,6 +127,7 @@ function App() {
       translatorServiceRef.current.updateConfig({
         apiKey: apiKey,
         sourceLanguage: sourceLanguage || undefined,
+        enableAutoSpeak: enableAutoSpeak,
         voiceConfig: {
           silenceThreshold: 0.01,
           silenceDuration: 1000,
@@ -146,7 +150,7 @@ function App() {
         systemAudioStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled, audioInputMode, systemAudioStream, browserNoiseSuppression, echoCancellation, autoGainControl]);
+  }, [apiKey, sourceLanguage, selectedDeviceId, noiseFilterEnabled, audioInputMode, systemAudioStream, browserNoiseSuppression, echoCancellation, autoGainControl, enableAutoSpeak]);
 
   // イベントハンドラー
   const handleStartTranslation = async () => {
@@ -269,6 +273,7 @@ function App() {
               browserNoiseSuppression={browserNoiseSuppression}
               echoCancellation={echoCancellation}
               autoGainControl={autoGainControl}
+              enableAutoSpeak={enableAutoSpeak}
               isTranslating={isTranslating}
               onApiKeyChange={setApiKey}
               onSourceLanguageChange={setSourceLanguage}
@@ -280,6 +285,7 @@ function App() {
               onBrowserNoiseSuppressionChange={setBrowserNoiseSuppression}
               onEchoCancellationChange={setEchoCancellation}
               onAutoGainControlChange={setAutoGainControl}
+              onAutoSpeakToggle={setEnableAutoSpeak}
             />
             
             <ControlPanel
