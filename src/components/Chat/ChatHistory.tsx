@@ -18,7 +18,7 @@ export default function ChatHistory({ messages, onClear }: ChatHistoryProps) {
   }, [messages]);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
+    <div className="bg-white rounded-lg shadow-md p-6 h-180 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-700">チャット履歴</h2>
         <button
@@ -31,7 +31,7 @@ export default function ChatHistory({ messages, onClear }: ChatHistoryProps) {
       
       <div 
         ref={chatContainerRef}
-        className="flex-1 overflow-y-auto space-y-3 max-h-80"
+        className="flex-1 overflow-y-auto space-y-3"
       >
         {messages.length === 0 ? (
           <div className="text-gray-500 text-center py-8">

@@ -91,7 +91,7 @@ export class TextToSpeechService {
         model: this.model,
         input: text,
         voice: this.voice,
-        instructions: "Please speak a little faster.",
+        instructions: "Speak very very quickly",
         response_format: "mp3"
       }),
     });

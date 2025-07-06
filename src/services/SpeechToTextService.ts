@@ -24,6 +24,7 @@ export class SpeechToTextService {
       const formData = new FormData();
       formData.append("file", audioBlob, "audio.wav");
       formData.append("model", this.model);
+      formData.append("prompt", "Transcribe only clearly audible Japanese and English.");
       
       // 言語が指定されている場合のみ追加（未指定の場合は自動検出）
       if (this.language) {
